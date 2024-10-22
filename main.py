@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
-from athena.query_agent import query_generator
+from athena.agents.query_agent import query_generator
 
-from athena.graph import run_patra_graph
 from athena.util import graph
 
 load_dotenv()

@@ -1,6 +1,6 @@
-from athena.agent_util import create_agent
+from athena.agents.agent_util import create_agent
 from athena.tools import print_hello
-from athena.util import llm, graph
+from athena.util import llm
 
 tools = [print_hello]
 patra_agent_template = """You are an helpful AI assistant that's helping to understand the data in a database.
