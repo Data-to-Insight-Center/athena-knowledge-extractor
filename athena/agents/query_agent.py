@@ -1,18 +1,18 @@
+import json
+
+from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
 from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from athena.util import llm, graph
 
-class QueryGenerator(BaseModel):
-    """ Use this class to structure the output for the query"""
-    cypher_query: str = Field(
-        description="Syntactically correct cypher query ready for execution"
-    )
+from athena.configuration_schema import Configuration
+from athena.graph_state import PatraState
+from athena.util import llm_json, graph
 
-    context: str = Field(
-        description="Context about the query"
-    )
-
-query_agent_prompt = """You are an expert in writing Cypher queries for a Neo4j database. 
+query_agent_prompt = """You are an expert in writing Cypher queries for a Neo4j database.
+Your task is to write a Cypher query to answer the following question: {question}
+Schema of the graph is as follows: {graph_schema}
+ 
 Write Cypher queries that avoid using directional edges. Instead of using arrows (-> or <-) for relationships, 
 use undirected relationships.
 Make sure that all relationships in the queries are undirected, 
@@ -71,16 +71,26 @@ available model types for Model are [convolutional neural network, large languag
 
 external_id in certain nodes refer to the node ids. These must be returned with results. 
 
+Return your response as a JSON object:
+{{
+    "cypher_query": "string",
+    "context": "string"
+}}
 """
 
 
-query_kg_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", query_agent_prompt),
-        ("human", "Only return the cypher query for the question: \n {question} \n Schema: {graph_schema}.",
-        ),
-    ]
-)
-# query_agent_llm = llm.with_structured_output(QueryGenerator)
-query_agent_llm = llm
-query_generator = query_kg_prompt | query_agent_llm
+def cypher_generator_node(state: PatraState, config: RunnableConfig):
+
+    configurable = Configuration.from_runnable_config(config)
+    graph_schema = configurable.graph_schema
+    query_question = state.user_question
+    # graph_schema = state.graph_schema
+
+    prompt_formatted = query_agent_prompt.format(question=query_question, graph_schema=graph_schema)
+
+    result = llm_json.invoke(
+        [SystemMessage(content=prompt_formatted),
+         HumanMessage(content="Generate the Cypher Query:")]
+    )
+    cypher_query = json.loads(result.content)["cypher_query"]
+    return {"cypher_query": cypher_query, "final_response": cypher_query}

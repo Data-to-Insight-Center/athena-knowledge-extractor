@@ -16,18 +16,25 @@ graph = Neo4jGraph(url=NEO4J_URI, username=NEO4J_USERNAME, password=NEO4J_PWD)
 # gpt4
 # llm = ChatOpenAI(temperature=0.2, model="gpt-4o")
 # #
-llm = ChatOpenAI(
-    base_url = 'http://access-hopper.rci.uits.iu.edu:11434/v1',
-    api_key='ollama',
-    model="llama3.1:70b",
-    max_tokens=10000,
-)
+# llm = ChatOpenAI(
+#     base_url = '',
+#     api_key='ollama',
+#     model="llama3.1:70b",
+#     max_tokens=10000,
+# )
 
 # llama 3.1 70b
-# llm = ChatOllama(
-#     model="llama3.1:70b",
-#     temperature=0,
-#     base_url='http://access-hopper.rci.uits.iu.edu:11434',
-# )
+llm_json = ChatOllama(
+    model="llama3.3:70b",
+    temperature=0.2,
+    base_url='',
+    format="json",
+)
+
+llm = ChatOllama(
+    model="llama3.3:70b",
+    temperature=0.2,
+    base_url='',
+)
 
 top_k_results = 10
