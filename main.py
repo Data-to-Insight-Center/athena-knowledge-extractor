@@ -5,7 +5,7 @@ from athena.util import graph
 
 load_dotenv()
 def main():
-    question = ("how many models in the system?")
+    question = ("what can you tell me about the user jstubbs?")
     result = run_patra_graph(question)
     # result = query_generator.invoke({"graph_schema": graph.get_structured_schema, "question": question})
 

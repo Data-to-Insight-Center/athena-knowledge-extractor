@@ -1,13 +1,24 @@
 import json
 
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_core.runnables import RunnableConfig
 from pydantic import BaseModel, Field
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
 
 from athena.configuration_schema import Configuration
 from athena.graph_state import PatraState
-from athena.util import llm_json, graph
+from athena.util import llm
+
+
+class QueryGenerator(BaseModel):
+    """ Uses this class to structure the output for the query"""
+    cypher_query: str = Field(
+        description="Syntactically correct cypher query ready for execution"
+    )
+
+    context: str = Field(
+        description="Context about the query"
+    )
+
 
 query_agent_prompt = """You are an expert in writing Cypher queries for a Neo4j database.
 Your task is to write a Cypher query to answer the following question: {question}
@@ -70,27 +81,24 @@ match (m:Model)-[:HAS_DEPLOYMENT]-(depl:Deployment)-[:DEPLOYED_IN]-(device:EdgeD
 available model types for Model are [convolutional neural network, large language model, foundational model]. These are case sensitive.
 
 external_id in certain nodes refer to the node ids. These must be returned with results. 
-
-Return your response as a JSON object:
-{{
-    "cypher_query": "string",
-    "context": "string"
-}}
 """
+query_agent_llm = llm.with_structured_output(QueryGenerator)
 
 
 def cypher_generator_node(state: PatraState, config: RunnableConfig):
-
+    # get the graph schema from the configuration dynamically
     configurable = Configuration.from_runnable_config(config)
     graph_schema = configurable.graph_schema
-    query_question = state.user_question
-    # graph_schema = state.graph_schema
+    # question to be converted to cypher
+    query_question = state.question
 
+    # creating the prompt for the cypher agent
     prompt_formatted = query_agent_prompt.format(question=query_question, graph_schema=graph_schema)
 
-    result = llm_json.invoke(
+    # invoking the agent and returning the query.
+    result = query_agent_llm.invoke(
         [SystemMessage(content=prompt_formatted),
          HumanMessage(content="Generate the Cypher Query:")]
     )
-    cypher_query = json.loads(result.content)["cypher_query"]
-    return {"cypher_query": cypher_query, "final_response": cypher_query}
+    cypher_query = result.cypher_query
+    return {"cypher_query": cypher_query, "messages": [AIMessage(content="Generated Cypher Query: {}".format(cypher_query))]}

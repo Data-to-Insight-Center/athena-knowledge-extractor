@@ -1,18 +1,19 @@
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage
 
+from athena.agents.patra_agent import patra_agent_node
 from athena.configuration_schema import Configuration
 from athena.graph_state import PatraState, PatraInput, PatraOutput
 from athena.agents.query_agent import cypher_generator_node
 from athena.util import graph
-from athena.agents.db_agent import db_executor
-from athena.agents.patra_agent import patra_executor
+from athena.agents.db_agent import db_agent_node
 from typing import Literal
 
 
-PATRA_AGENT_NAME = "patra_agent"
-QUERY_AGENT_NAME = "query_agent"
-DB_AGENT_NAME = "db_executor"
+PATRA_AGENT = "patra_agent"
+QUERY_AGENT = "query_agent"
+DB_AGENT = "db_executor"
 
 
 # def patra_node(state: PatraState) -> PatraState:
@@ -28,12 +29,7 @@ DB_AGENT_NAME = "db_executor"
 #     state.messages.append(AIMessage(content=str(cypher_query), name=QUERY_AGENT_NAME))
 #     return state
 #
-# def execute_query_node(state: PatraState) -> PatraState:
-#     query = state.messages[-1].content
-#     question = state.messages[-2].content
-#     response = db_executor.invoke({"query": query, "original_question": question})
-#     state.messages.append(AIMessage(content=response['output'], name=DB_AGENT_NAME))
-#     return state
+
 #
 # def job_agent(state: PatraState) -> PatraState:
 #     # Use QueryAgent and submit job
@@ -55,17 +51,20 @@ DB_AGENT_NAME = "db_executor"
 #     else:
 #         return END
 #
-# def router(state) -> Literal["call_tool", "__end__", "continue"]:
-#     # This is the router
-#     messages = state.messages
-#     last_message = messages[-1]
-#     # if isinstance(last_message, ToolMessage) and last_message.tool_calls:
-#     #     # The previous agent is invoking a tool
-#     #     return "call_tool"
-#     if "FINAL ANSWER" in last_message.content:
-#         # Any agent decided the work is done
-#         return "__end__"
-#     return "continue"
+def router(state: PatraState, config: RunnableConfig) -> Literal["continue", "__end__"]:
+    # Routing based on previous messages
+
+    # if the patra agent has decided the work is done, end loop
+    if state.answer_completed:
+        return "__end__"
+
+    # else check if the iteration count has reached the limit
+    patra_config = Configuration.from_runnable_config(runnable_config)
+    if state.iterations >= patra_config.max_iterations:
+        return "__end__"
+
+    # else continue the patra loop.
+    return "continue"
 
 
 # Setting up configurations for Patra
@@ -82,22 +81,22 @@ patra = StateGraph(PatraState, input=PatraInput, output=PatraOutput, config_sche
 patra.graph_schema = str(graph.get_structured_schema)
 
 # Add nodes
-# patra.add_node(PATRA_AGENT_NAME, patra_node)
-# patra.add_node(DB_AGENT_NAME, execute_query_node)
-patra.add_node(QUERY_AGENT_NAME, cypher_generator_node)
+patra.add_node(PATRA_AGENT, patra_agent_node)
+patra.add_node(DB_AGENT, db_agent_node)
+patra.add_node(QUERY_AGENT, cypher_generator_node)
 
 # Set entry point
-patra.set_entry_point(QUERY_AGENT_NAME)
+patra.set_entry_point(PATRA_AGENT)
 
 # QueryAgent can interact with DBAgent multiple times
-# patra.add_edge(QUERY_AGENT_NAME, DB_AGENT_NAME)
-patra.add_edge(QUERY_AGENT_NAME, END)
+patra.add_edge(QUERY_AGENT, DB_AGENT)
+patra.add_edge(DB_AGENT, PATRA_AGENT)
 
-# patra.add_conditional_edges(
-#     PATRA_AGENT_NAME,
-#     router,
-#     {"continue": QUERY_AGENT_NAME, "__end__": END},
-# )
+patra.add_conditional_edges(
+    PATRA_AGENT,
+    router,
+    {"continue": QUERY_AGENT, "__end__": END},
+)
 
 # Compile the graph
 app = patra.compile()

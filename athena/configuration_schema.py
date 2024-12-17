@@ -10,7 +10,7 @@ from dataclasses import dataclass
 class Configuration:
     """The configurable fields for the Patra agent."""
 
-    max_iterations: int = 3
+    max_iterations: int = 5
     graph_schema: str = ""
 
     @classmethod
